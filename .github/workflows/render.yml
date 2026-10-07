@@ -25,10 +25,17 @@ jobs:
         shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: Instalar FFmpeg (se faltar)
+      - name: Instalar FFmpeg (versao pronta)
         if: runner.os == 'Linux'
+        timeout-minutes: 10
         run: |
-          if ! command -v ffmpeg >/dev/null; then sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core; fi
+          if ! command -v ffmpeg >/dev/null; then
+            curl -fsSL -o /tmp/ffmpeg.tar.xz https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+            mkdir -p /tmp/ffmpeg && tar -xJf /tmp/ffmpeg.tar.xz -C /tmp/ffmpeg --strip-components=1
+            echo "/tmp/ffmpeg/bin" >> "$GITHUB_PATH"
+          fi
+      - name: Verificar FFmpeg
+        run: ffmpeg -version | head -1
       - name: Montar video
         id: render
         env:
@@ -54,8 +61,8 @@ jobs:
         run: |
           curl -sS -X POST "$RESUME_URL" -H "Content-Type: application/json" \
             -d "{\"status\":\"success\",\"file_name\":\"$FILE\",\"duration\":\"$DURATION\",\"asset_api_url\":\"https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID\"}"
-      - name: Avisar n8n (falha)
-        if: failure() && inputs.resumeUrl != ''
+      - name: Avisar n8n (falha ou cancelado)
+        if: (failure() || cancelled()) && inputs.resumeUrl != ''
         env:
           RESUME_URL: ${{ inputs.resumeUrl }}
         run: |
