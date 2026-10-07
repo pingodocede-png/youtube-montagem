@@ -10,9 +10,6 @@ on:
         required: false
 permissions:
   contents: write
-concurrency:
-  group: render
-  cancel-in-progress: false
 jobs:
   render:
     # Sem variavel RUNNER usa os servidores gratis do GitHub.
@@ -47,8 +44,8 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILE: ${{ steps.render.outputs.file }}
         run: |
-          gh release view videos >/dev/null 2>&1 || gh release create videos --title "Videos" --notes "Ficheiros gerados automaticamente"
-          gh release upload videos "out/$FILE" --clobber
+          gh release view videos >/dev/null 2>&1 || gh release create videos --title "Videos" --notes "Ficheiros gerados automaticamente" || true
+          for i in 1 2 3; do gh release upload videos "out/$FILE" --clobber && break; sleep 10; done
           ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/videos" --jq ".assets[] | select(.name==\"$FILE\") | .id")
           echo "id=$ID" >> "$GITHUB_OUTPUT"
       - name: Avisar n8n (sucesso)
