@@ -1,0 +1,62 @@
+name: Montar video
+on:
+  workflow_dispatch:
+    inputs:
+      job:
+        description: Trabalho (JSON em base64)
+        required: true
+      resumeUrl:
+        description: Endereco de retorno do n8n
+        required: false
+permissions:
+  contents: write
+concurrency:
+  group: render
+  cancel-in-progress: false
+jobs:
+  render:
+    # Sem variavel RUNNER usa os servidores gratis do GitHub.
+    # Para usar o seu computador: Settings > Secrets and variables > Actions > Variables > RUNNER = self-hosted
+    runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar FFmpeg (se faltar)
+        if: runner.os == 'Linux'
+        run: |
+          if ! command -v ffmpeg >/dev/null; then sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core; fi
+      - name: Montar video
+        id: render
+        env:
+          JOB: ${{ inputs.job }}
+        run: python3 render.py
+      - name: Guardar ficheiro
+        id: up
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FILE: ${{ steps.render.outputs.file }}
+        run: |
+          gh release view videos >/dev/null 2>&1 || gh release create videos --title "Videos" --notes "Ficheiros gerados automaticamente"
+          gh release upload videos "out/$FILE" --clobber
+          ID=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/videos" --jq ".assets[] | select(.name==\"$FILE\") | .id")
+          echo "id=$ID" >> "$GITHUB_OUTPUT"
+      - name: Avisar n8n (sucesso)
+        if: success() && inputs.resumeUrl != ''
+        env:
+          RESUME_URL: ${{ inputs.resumeUrl }}
+          FILE: ${{ steps.render.outputs.file }}
+          DURATION: ${{ steps.render.outputs.duration }}
+          ASSET_ID: ${{ steps.up.outputs.id }}
+        run: |
+          curl -sS -X POST "$RESUME_URL" -H "Content-Type: application/json" \
+            -d "{\"status\":\"success\",\"file_name\":\"$FILE\",\"duration\":\"$DURATION\",\"asset_api_url\":\"https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/$ASSET_ID\"}"
+      - name: Avisar n8n (falha)
+        if: failure() && inputs.resumeUrl != ''
+        env:
+          RESUME_URL: ${{ inputs.resumeUrl }}
+        run: |
+          curl -sS -X POST "$RESUME_URL" -H "Content-Type: application/json" \
+            -d "{\"status\":\"failed\",\"run_url\":\"$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID\"}"
