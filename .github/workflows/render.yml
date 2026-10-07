@@ -18,7 +18,8 @@ jobs:
     # Sem variavel RUNNER usa os servidores gratis do GitHub.
     # Para usar o seu computador: Settings > Secrets and variables > Actions > Variables > RUNNER = self-hosted
     runs-on: ${{ vars.RUNNER || 'ubuntu-latest' }}
-    timeout-minutes: 40
+    # 360 minutos = maximo permitido pelo GitHub
+    timeout-minutes: 360
     defaults:
       run:
         shell: bash
