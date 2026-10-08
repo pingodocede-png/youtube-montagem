@@ -52,9 +52,19 @@ for i, (s, d) in enumerate(zip(scenes, durs)):
     ok = False
     if s.get("video_url"):
         try:
-            dl(s["video_url"], src)
-            run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", src, "-t", f"{d:.3f}", "-vf", vf, "-an",
-                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", out])
+            if s.get("media_type") == "image":
+                img = f"work/img{i}.jpg"
+                dl(s["video_url"], img)
+                frames = max(int(d * 30), 1)
+                zvf = (f"scale={W*2}:{H*2}:force_original_aspect_ratio=increase,crop={W*2}:{H*2},"
+                       f"zoompan=z='min(zoom+0.0008,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s={W}x{H}:fps=30,"
+                       f"setsar=1,format=yuv420p")
+                run(["ffmpeg", "-y", "-loop", "1", "-i", img, "-t", f"{d:.3f}", "-vf", zvf, "-an",
+                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", out])
+            else:
+                dl(s["video_url"], src)
+                run(["ffmpeg", "-y", "-stream_loop", "-1", "-i", src, "-t", f"{d:.3f}", "-vf", vf, "-an",
+                     "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", out])
             ok = True
         except Exception as e:
             print("Clip falhou, uso fundo preto:", i, e, flush=True)
